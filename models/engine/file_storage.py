@@ -21,9 +21,8 @@ ARGS:
 """
 
 
-import os
 import json
-from models.base_model import BaseModel
+import os
 
 
 class FileStorage:
@@ -34,24 +33,48 @@ class FileStorage:
     __file_path = "file.json"
     __objects = {}
 
-    def all(self):
+    @staticmethod
+    def get_class_map():
+        """Returns a dictionary mapping class names to classes."""
+        from models.base_model import BaseModel
+        from models.user import User
+        from models.state import State
+        from models.city import City
+        from models.amenity import Amenity
+        from models.place import Place
+        from models.review import Review
+
+        return ({
+            'BaseModel': BaseModel,
+            'User': User,
+            'State': State,
+            'City': City,
+            'Amenity': Amenity,
+            'Place': Place,
+            'Review': Review
+        })
+
+    def all(self, cls=None):
         """Returns the dictionary __objects"""
 
-        return (self.__objects)
+        if cls is None:
+            return (self.__objects)
+        return ({k: v for k, v in self.__objects.items()
+                if isinstance(v, cls)})
 
     def new(self, obj):
         """sets in __objects the obj with key <obj class name>.id"""
 
         key = "{}.{}".format(obj.__class__.__name__, obj.id)
-        FileStorage.__objects[key] = obj
+        self.__objects[key] = obj
 
     def save(self):
         """serializes __objects to the JSON file"""
 
         serialized_objects = {}
-        for key, value in FileStorage.__objects.items():
+        for key, value in self.__objects.items():
             serialized_objects[key] = value.to_dict()
-        with open(FileStorage.__file_path, "w") as file:
+        with open(self.__file_path, "w") as file:
             json.dump(serialized_objects, file)
 
     def reload(self):
@@ -59,15 +82,13 @@ class FileStorage:
         only if the JSON file exists, otherwise do nothing.
         """
 
-        if os.path.isfile(FileStorage.__file_path):
-            with open(FileStorage.__file_path, "r") as file:
+        if os.path.isfile(self.__file_path):
+            with open(self.__file_path, "r") as file:
                 deserialized_objects = json.load(file)
+                class_map = FileStorage.get_class_map()
                 for key, value in deserialized_objects.items():
                     class_name, object_id = key.split(".")
-                    class_map = {
-                            'BaseModel': BaseModel,
-                    }
                     class_obj = class_map.get(class_name)
                     if class_obj:
                         obj = class_obj(**value)
-                        FileStorage.__objects[key] = obj
+                        self.__objects[key] = obj

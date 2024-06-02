@@ -4,6 +4,12 @@
 
 import cmd
 from models.base_model import BaseModel
+from models.user import User
+from models.state import State
+from models.city import City
+from models.amenity import Amenity
+from models.place import Place
+from models.review import Review
 from models import storage
 
 
@@ -20,9 +26,12 @@ class HBNBCommand(cmd.Cmd):
             print("** class name missing **")
             return
         try:
-            new_instance = eval(arg)()
-            new_instance.save()
-            print(new_instance.id)
+            if arg in storage.get_class_map():
+                new_instance = storage.get_class_map()[arg]()
+                new_instance.save()
+                print(new_instance.id)
+            else:
+                print("** class doesn't exist **")
         except NameError:
             print("** class doesn't exist **")
 
@@ -31,97 +40,102 @@ class HBNBCommand(cmd.Cmd):
         based on class name and id."""
 
         args = arg.split()
+        class_map = storage.get_class_map()
         if not args:
             print("** class name missing **")
             return
-        try:
-            class_name = args[0]
-            if len(args) < 2:
-                print("** instance id missing **")
-                return
-            obj_id = args[1]
-            key = "{}.{}".format(class_name, obj_id)
-            if key in storage.all():
-                print(storage.all()[key])
-            else:
-                print("** no instance found **")
-        except KeyError:
+        class_name = args[0]
+        if class_name not in class_map:
             print("** class doesn't exist **")
+            return
+        if len(args) < 2:
+            print("** instance id missing **")
+            return
+        obj_id = args[1]
+        key = "{}.{}".format(class_name, obj_id)
+        if key in storage.all():
+            print(storage.all()[key])
+        else:
+            print("** no instance found **")
 
     def do_destroy(self, arg):
         """Deletes an instance based on the class name and id."""
 
         args = arg.split()
+        class_map = storage.get_class_map()
         if not args:
             print("** class name missing **")
             return
-        try:
-            class_name = args[0]
-            if len(args) < 2:
-                print("** instance id missing **")
-                return
-            obj_id = args[1]
-            key = "{}.{}".format(class_name, obj_id)
-            if key in storage.all():
-                del storage.all()[key]
-                storage.save()
-            else:
-                print("** no instance found **")
-        except KeyError:
+        class_name = args[0]
+        if class_name not in class_map:
             print("** class doesn't exist **")
+            return
+        if len(args) < 2:
+            print("** instance id missing **")
+            return
+        obj_id = args[1]
+        key = "{}.{}".format(class_name, obj_id)
+        if key in storage.all():
+            del storage.all()[key]
+            storage.save()
+        else:
+            print("** no instance found **")
 
     def do_all(self, arg):
         """Prints all string representations of all
         instances based or not on class name."""
 
         args = arg.split()
-        obj_list = []
-        if args and args[0] not in BaseModel.__subclasses__():
+        if args and args[0] not in storage.get_class_map():
             print("** class doesn't exist **")
             return
-        for key, obj in storage.all().items():
-            if not args or obj.__class__.__name__ == args[0]:
-                obj_list.append(str(obj))
-        print(obj_list)
+        class_name = args[0] if args else None
+        instances = storage.all()
+        instance_list = []
+        for key, value in instances.items():
+            if class_name:
+                if key.startswith(class_name):
+                    instance_list.append(value.to_dict())
+            else:
+                instance_list.append(value.to_dict())
+        print(instance_list)
 
     def do_update(self, arg):
         """Updates an instance based on class name & id
         by adding or updating attribute."""
 
         args = arg.split()
+        class_map = storage.get_class_map()
         if not args:
             print("** class name missing **")
             return
-        try:
-            class_name = args[0]
-            if class_name not in BaseModel.__subclasses__():
-                print("** class doesn't exist **")
-                return
-            if len(args) < 2:
-                print("** instance id missing **")
-                return
-            obj_id = args[1]
-            key = "{}.{}".format(class_name, obj_id)
-            if key not in storage.all():
-                print("** no instance found **")
-                return
-            if len(args) < 3:
-                print("** attribute name missing **")
-                return
-            if len(args) < 4:
-                print("** value missing **")
-                return
-            attribute_name = args[2]
-            attribute_value = args[3]
-            obj = storage.all()[key]
-            try:
-                attribute_value = eval(attribute_value)
-            except (NameError, SyntaxError):
-                pass
-            setattr(obj, attribute_name, attribute_value)
-            obj.save()
-        except KeyError:
+        class_name = args[0]
+        if class_name not in class_map:
             print("** class doesn't exist **")
+            return
+        if len(args) < 2:
+            print("** instance id missing **")
+            return
+        obj_id = args[1]
+        key = "{}.{}".format(class_name, obj_id)
+        if key not in storage.all():
+            print("** no instance found **")
+            return
+        if len(args) < 3:
+            print("** attribute name missing **")
+            return
+        if len(args) < 4:
+            print("** value missing **")
+            return
+        attribute_name = args[2]
+        attribute_value = args[3]
+        obj = storage.all()[key]
+        try:
+            attribute_value = eval(attribute_value)
+        except (NameError, SyntaxError):
+            pass
+        setattr(obj, attribute_name, attribute_value)
+        obj.save()
 
     def do_quit(self, arg):
         """Quit command to exit the program"""
@@ -139,17 +153,61 @@ class HBNBCommand(cmd.Cmd):
 
         pass
 
-    def do_User_all(self, arg):
-        """Prints all instances of User class."""
+    def default(self, line):
+        """Handle class-specific commands like <class name>.all()."""
 
-        objects = storage.all(User)
-        print(objects)
+        args = line.split(".")
+        if len(args) == 2:
+            class_name = args[0]
+            command = args[1].strip()
 
-    def do_State_all(self, arg):
-        """Prints all instances of State class."""
-
-        objects = storage.all(State)
-        print(objects)
+            class_map = storage.get_class_map()
+            if class_name in class_map:
+                cls = class_map[class_name]
+                if command == "all()":
+                    instances = cls.all()
+                    print([str(obj) for obj in instances])
+                    return
+                elif command == "count()":
+                    count = sum(1 for obj in storage.all().values() if isinstance(obj, cls))
+                    print(count)
+                    return
+                elif command.startswith("show(") and command.endswith(")"):
+                    obj_id = command[5:-1].strip("\"'")
+                    instance = cls.show(obj_id)
+                    if instance:
+                        print(instance)
+                    else:
+                        print("** no instance found **")
+                    return
+                elif command.startswith("destroy(") and command.endswith(")"):
+                    obj_id = command[8:-1].strip("\"'")
+                    if not cls.destroy(obj_id):
+                        print("** no instance found **")
+                    return
+                elif command.startswith("update(") and command.endswith(")"):
+                    params = command[7:-1].strip()
+                    obj_id, obj_dict_str = params.split(", ", 1)
+                    obj_id = obj_id.strip("\"'")
+                    try:
+                        import json
+                        obj_dict = json.loads(obj_dict_str.replace("'", "\""))
+                    except json.JSONDecodeError:
+                        print("** invalid dictionary representation **")
+                        return
+                    instance = cls.show(obj_id)
+                    if instance:
+                        for key, value in obj_dict.items():
+                            if hasattr(instance, key):
+                                attr_type = type(getattr(instance, key))
+                                setattr(instance, key, attr_type(value))
+                            else:
+                                setattr(instance, key, value)
+                        instance.save()
+                    else:
+                        print("** no instance found **")
+                    return
+        print("*** Unknown syntax: {}".format(line))
 
 
 if __name__ == '__main__':
